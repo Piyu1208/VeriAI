@@ -12,6 +12,7 @@
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
     "http://localhost:3000/*"
   ],
   "background": {
@@ -23,7 +24,8 @@
       "matches": [
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
-        "https://chat.deepseek.com/*"
+        "https://chat.deepseek.com/*",
+        "https://gemini.google.com/*"
       ],
       "js": [
         "content.js"

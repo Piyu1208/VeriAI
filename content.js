@@ -2,12 +2,8 @@ console.log('[VeriAI] content.js injected ✅');
 
 // ─── content.js ───────────────────────────────────────────────────────────────
 //
-// Auto-detects the assistant message node for ANY LLM site using:
-//   1. Known data attributes (ChatGPT, etc.)
-//   2. aria-label heuristics (Gemini, Copilot, etc.)
-//   3. Class name pattern matching (DeepSeek, Claude, etc.)
-//   4. Caches the working selector in chrome.storage.local so it
-//      reuses it on next load and self-heals if it stops working.
+// Auto-detects the assistant message node for ANY LLM site.
+// Supports: ChatGPT, DeepSeek, Claude, Gemini, Copilot, Perplexity
 // ──────────────────────────────────────────────────────────────────────────────
 
 // ── BOOT ──────────────────────────────────────────────────────────────────────
@@ -24,11 +20,9 @@ function init() {
 
 // ── SELECTOR CACHE ────────────────────────────────────────────────────────────
 
-// In-memory cache for this session — avoids repeated storage reads
 let cachedWrapperSelector = null;
 let cachedContentSelector = null;
 
-// Load cached selectors from storage on boot
 chrome.storage.local.get(['ha_wrapper_sel', 'ha_content_sel'], (result) => {
   if (result.ha_wrapper_sel) {
     cachedWrapperSelector = result.ha_wrapper_sel;
@@ -74,33 +68,18 @@ function watchForResponses() {
 }
 
 
-// ── AUTO-DETECT: GET LATEST ASSISTANT NODE ────────────────────────────────────
+// ── GET LATEST ASSISTANT NODE ─────────────────────────────────────────────────
 
-/**
- * Tries to find the latest assistant message node on ANY LLM site.
- *
- * Detection order:
- *   1. Use cached selector from a previous successful detection
- *   2. Known data attributes  → works for ChatGPT
- *   3. aria-label heuristics  → works for Gemini, Copilot
- *   4. Class name patterns    → works for DeepSeek, Claude, others
- *   5. Text content heuristic → last resort, finds largest text block
- *
- * When a new selector is found, it's saved to chrome.storage.local
- * so next page load reuses it without re-detecting.
- */
 function getLatestAssistantNode() {
 
-  // ── Strategy 0: Use cached selector if we have one ────────────────────────
+  // ── Strategy 0: Use cached selector ───────────────────────────────────────
   if (cachedWrapperSelector) {
     const nodes = document.querySelectorAll(cachedWrapperSelector);
     if (nodes.length > 0) {
       const wrapper = nodes[nodes.length - 1];
       const content = findContentNode(wrapper, cachedContentSelector);
-      if (content && content.innerText.trim().length > 20) {
-        return content;
-      }
-      // Cached selector no longer works — clear it and re-detect
+      if (content && content.innerText.trim().length > 20) return content;
+
       console.warn('[VeriAI] Cached selector stopped working, re-detecting...');
       cachedWrapperSelector = null;
       cachedContentSelector = null;
@@ -108,135 +87,143 @@ function getLatestAssistantNode() {
     }
   }
 
-  // ── Strategy 1: data attributes ───────────────────────────────────────────
-  // Works for: ChatGPT, many custom LLM UIs
-  const dataSelectors = [
-    '[data-message-author-role="assistant"]',
-    '[data-role="assistant"]',
-    '[data-sender="assistant"]',
-    '[data-actor="assistant"]',
-    '[data-message-role="assistant"]',
-    '[data-type="assistant"]',
-    '[data-author="assistant"]',
+  // ── Strategy 1: Explicit known selectors per site ─────────────────────────
+  //
+  // Format: [wrapperSelector, contentSelector | null, siteName]
+  // contentSelector null = use the wrapper itself as the content node.
+  // To add a new LLM: just add one line here.
+  //
+  const knownSelectors = [
+
+    // ChatGPT
+    ['[data-message-author-role="assistant"]', '.markdown',             'ChatGPT'],
+    ['[data-message-author-role="assistant"]', '.prose',                'ChatGPT (prose)'],
+
+    // DeepSeek — ds-markdown is the container, ds-markdown-paragraph is each paragraph
+    ['.ds-markdown',                            null,                    'DeepSeek'],
+
+    // Claude
+    ['[data-is-streaming="false"]',             '.font-claude-message', 'Claude'],
+    ['.font-claude-message',                    null,                    'Claude (fallback)'],
+
+    // Gemini 
+    ['model-response',        '.markdown', 'Gemini (fallback)'],
+
+    // Generic data attributes — many custom/open-source LLM UIs use these
+    ['[data-role="assistant"]',                 null,                    'Generic data-role'],
+    ['[data-sender="assistant"]',               null,                    'Generic data-sender'],
+    ['[data-actor="assistant"]',                null,                    'Generic data-actor'],
+    ['[data-message-role="assistant"]',         null,                    'Generic data-message-role'],
   ];
 
-  for (const sel of dataSelectors) {
-    const nodes = document.querySelectorAll(sel);
-    if (nodes.length > 0) {
-      const wrapper = nodes[nodes.length - 1];
-      const content = findContentNode(wrapper, null);
-      if (content) {
-        saveSelector(sel, getContentSelector(wrapper, content));
-        return content;
-      }
+  for (const [wrapperSel, contentSel, siteName] of knownSelectors) {
+    const nodes = document.querySelectorAll(wrapperSel);
+    if (nodes.length === 0) continue;
+
+    const wrapper = nodes[nodes.length - 1];
+    const content = contentSel ? (wrapper.querySelector(contentSel) || wrapper) : wrapper;
+
+    if (content && content.innerText.trim().length > 20) {
+      saveSelector(wrapperSel, contentSel);
+      console.log(`[VeriAI] ✅ Detected: ${siteName} | wrapper: ${wrapperSel} | content: ${contentSel || 'self'}`);
+      return content;
     }
   }
 
   // ── Strategy 2: aria-label heuristics ─────────────────────────────────────
-  // Works for: Gemini (aria-label="Gemini"), Copilot, Perplexity
   const ariaNodes = [...document.querySelectorAll('[aria-label]')]
     .filter(el => /assistant|bot|ai response|model|gemini|claude|deepseek|copilot|perplexity/i
       .test(el.getAttribute('aria-label') || ''));
 
   if (ariaNodes.length > 0) {
-    const wrapper  = ariaNodes[ariaNodes.length - 1];
-    const sel      = buildAriaSelector(wrapper);
-    const content  = findContentNode(wrapper, null);
+    const wrapper = ariaNodes[ariaNodes.length - 1];
+    const sel     = `${wrapper.tagName.toLowerCase()}[aria-label="${wrapper.getAttribute('aria-label')}"]`;
+    const content = findContentNode(wrapper, null);
     if (content) {
       saveSelector(sel, getContentSelector(wrapper, content));
+      console.log('[VeriAI] ✅ Detected via aria-label:', sel);
       return content;
     }
   }
 
   // ── Strategy 3: class name pattern matching ────────────────────────────────
-  // Works for: DeepSeek (.ds-message--assistant), Claude (.font-claude-message),
-  //            Mistral, Llama.cpp UIs, open-source chat UIs
   const classPatterns = [
-    /assistant/i, /bot[-_]?message/i, /ai[-_]?message/i,
-    /model[-_]?response/i, /llm[-_]?response/i, /response[-_]?bubble/i,
-    /chat[-_]?response/i, /claude[-_]?message/i, /ds[-_]?message.*assistant/i,
+    // DeepSeek specific
+    [/^ds-markdown$/,           'DeepSeek (ds-markdown)'],
+    [/^ds-markdown-paragraph$/, 'DeepSeek (ds-markdown-paragraph)'],
+    [/ds[-_]?message/i,         'DeepSeek (ds-message)'],
+    // Generic
+    [/assistant/i,              'Generic (assistant)'],
+    [/bot[-_]?message/i,        'Generic (bot-message)'],
+    [/ai[-_]?message/i,         'Generic (ai-message)'],
+    [/model[-_]?response/i,     'Generic (model-response)'],
+    [/llm[-_]?response/i,       'Generic (llm-response)'],
+    [/claude[-_]?message/i,     'Claude (class)'],
+    [/response[-_]?bubble/i,    'Generic (response-bubble)'],
+    [/chat[-_]?response/i,      'Generic (chat-response)'],
   ];
 
   const allDivs = [...document.querySelectorAll('div, section, article')];
 
-  for (const pattern of classPatterns) {
+  for (const [pattern, label] of classPatterns) {
     const matches = allDivs.filter(el => pattern.test(el.className || ''));
-    if (matches.length > 0) {
-      const wrapper = matches[matches.length - 1];
-      const content = findContentNode(wrapper, null);
-      if (content && content.innerText.trim().length > 20) {
-        const sel = buildClassSelector(wrapper, pattern);
-        saveSelector(sel, getContentSelector(wrapper, content));
-        return content;
-      }
+    if (matches.length === 0) continue;
+
+    const wrapper = matches[matches.length - 1];
+    const content = findContentNode(wrapper, null);
+
+    if (content && content.innerText.trim().length > 20) {
+      const matchClass = [...wrapper.classList].find(c => pattern.test(c));
+      const sel        = matchClass ? `.${matchClass}` : wrapper.tagName.toLowerCase();
+      saveSelector(sel, getContentSelector(wrapper, content));
+      console.log(`[VeriAI] ✅ Detected via class: ${label} → .${matchClass}`);
+      return content;
     }
   }
 
-  // ── Strategy 4: role="presentation" or role="log" children ────────────────
-  // Works for: some custom UIs that use ARIA roles on chat containers
+  // ── Strategy 4: role=log children heuristic ───────────────────────────────
   const chatLogs = document.querySelectorAll('[role="log"], [role="feed"]');
   for (const log of chatLogs) {
     const children = [...log.children];
-    // Assume even children = user, odd = assistant (common pattern)
-    const lastOdd = children.filter((_, i) => i % 2 !== 0).pop();
+    const lastOdd  = children.filter((_, i) => i % 2 !== 0).pop();
     if (lastOdd) {
       const content = findContentNode(lastOdd, null);
       if (content && content.innerText.trim().length > 20) {
-        console.log('[VeriAI] Detected via role=log child heuristic');
+        console.log('[VeriAI] ✅ Detected via role=log heuristic');
         return content;
       }
     }
   }
 
-  // ── Strategy 5: largest text block heuristic (last resort) ────────────────
-  // Finds the most recently added large block of text — very broad but
-  // works as a last resort for unknown UIs
+  // ── Strategy 5: largest text block (last resort) ──────────────────────────
   const textBlocks = allDivs
-    .filter(el => {
-      const text = el.innerText?.trim() || '';
-      const kids = el.children.length;
-      // Look for leaf-ish nodes with substantial text
-      return text.length > 150 && kids < 10;
-    })
+    .filter(el => (el.innerText?.trim().length || 0) > 150 && el.children.length < 10)
     .sort((a, b) => (b.innerText?.length || 0) - (a.innerText?.length || 0));
 
   if (textBlocks.length > 0) {
-    console.warn('[VeriAI] Using last-resort text block heuristic — may be inaccurate');
+    console.warn('[VeriAI] Using last-resort heuristic — may be inaccurate');
     return textBlocks[0];
   }
 
-  console.warn('[VeriAI] Could not detect assistant node on this page');
+  console.warn('[VeriAI] Could not detect assistant node — site may not be supported');
   return null;
 }
 
 
-// ── FIND CONTENT NODE INSIDE WRAPPER ─────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 
-/**
- * Given a wrapper element, finds the actual readable content node inside it.
- * If a previously cached content selector is provided, tries that first.
- *
- * @param {Element}     wrapper         - The assistant message wrapper
- * @param {string|null} cachedSelector  - Previously cached content selector
- * @returns {Element}
- */
 function findContentNode(wrapper, cachedSelector) {
-
-  // Try cached content selector first
   if (cachedSelector) {
     const node = wrapper.querySelector(cachedSelector);
     if (node && node.innerText.trim().length > 10) return node;
   }
 
-  // Known content node selectors — ordered by specificity
   const contentSelectors = [
     '.markdown', '.prose',
     '[class*="markdown"]', '[class*="prose"]',
     '[class*="message-content"]', '[class*="response-content"]',
     '[class*="msg-content"]', '[class*="chat-content"]',
-    '[class*="reply-content"]', '[class*="answer-content"]',
     '[class*="output"]', '[class*="text-content"]',
-    'p', // last resort — just grab the first paragraph
   ];
 
   for (const sel of contentSelectors) {
@@ -244,37 +231,11 @@ function findContentNode(wrapper, cachedSelector) {
     if (node && node.innerText.trim().length > 10) return node;
   }
 
-  // Nothing found inside — return the wrapper itself
   return wrapper;
 }
 
-
-// ── SELECTOR BUILDING HELPERS ─────────────────────────────────────────────────
-
-/**
- * Builds a precise CSS selector string for a wrapper element found via aria-label.
- */
-function buildAriaSelector(el) {
-  const label = el.getAttribute('aria-label') || '';
-  const tag   = el.tagName.toLowerCase();
-  return `${tag}[aria-label="${label}"]`;
-}
-
-/**
- * Builds a CSS selector from the first matching class on the wrapper element.
- */
-function buildClassSelector(el, pattern) {
-  const classes    = [...el.classList];
-  const matchClass = classes.find(c => pattern.test(c));
-  return matchClass ? `.${matchClass}` : el.tagName.toLowerCase();
-}
-
-/**
- * Gets a relative selector for the content node within its wrapper.
- */
 function getContentSelector(wrapper, content) {
   if (content === wrapper) return null;
-  // Try to build a selector from content's classes
   if (content.className) {
     const firstClass = content.className.trim().split(/\s+/)[0];
     if (firstClass) return `.${firstClass}`;
@@ -282,21 +243,14 @@ function getContentSelector(wrapper, content) {
   return null;
 }
 
-/**
- * Saves a working selector pair to memory cache and chrome.storage.local.
- */
 function saveSelector(wrapperSel, contentSel) {
-  if (cachedWrapperSelector === wrapperSel) return; // already cached
-
+  if (cachedWrapperSelector === wrapperSel) return;
   cachedWrapperSelector = wrapperSel;
   cachedContentSelector = contentSel;
-
   chrome.storage.local.set({
     ha_wrapper_sel: wrapperSel,
     ha_content_sel: contentSel || ''
   });
-
-  console.log('[VeriAI] ✅ Auto-detected and cached selector:', wrapperSel, '→', contentSel);
 }
 
 
