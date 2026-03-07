@@ -45,7 +45,7 @@
     Example output:
     ["The Eiffel Tower stands 330 metres tall", "Python was created by Guido van Rossum in 1991"]`;
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
         'Content-Type': 'application/json',

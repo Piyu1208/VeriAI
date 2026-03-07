@@ -9,7 +9,7 @@
   ],
   "host_permissions": [
     "https://chat.openai.com/*",
-    "https://api.anthropic.com/*",
+    "https://openrouter.ai/*",
     "https://api.tavily.com/*"
   ],
   "background": {
