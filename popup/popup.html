@@ -28,7 +28,6 @@
     }
 
     .header-icon { font-size: 22px; }
-
     .header-text { flex: 1; }
 
     .header-title {
@@ -79,7 +78,6 @@
       font-weight: 600;
     }
 
-    /* Toggle switch */
     .switch {
       position: relative;
       width: 44px;
@@ -126,7 +124,7 @@
       background: #ffffff;
     }
 
-    /* ── Section Wrapper ───────────────────────────────────────── */
+    /* ── Backend Status ────────────────────────────────────────── */
     .section {
       padding: 14px 18px;
       border-bottom: 1px solid #21262d;
@@ -140,91 +138,52 @@
       margin-bottom: 10px;
     }
 
-    /* ── API Key Inputs ────────────────────────────────────────── */
-    .input-group {
-      margin-bottom: 10px;
-    }
-
-    .input-group:last-of-type {
-      margin-bottom: 12px;
-    }
-
-    .input-label {
-      font-size: 10px;
-      color: #8b949e;
-      margin-bottom: 5px;
+    .backend-status {
       display: flex;
       align-items: center;
-      gap: 6px;
-    }
-
-    .input-label .key-icon { font-size: 11px; }
-
-    .key-input {
-      width: 100%;
-      padding: 8px 10px;
+      gap: 10px;
+      padding: 9px 12px;
       background: #161b22;
-      border: 1px solid #30363d;
+      border: 1px solid #21262d;
       border-radius: 4px;
-      color: #c9d1d9;
-      font-family: 'Courier New', monospace;
+    }
+
+    .backend-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #484f58;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .backend-dot.online {
+      background: #3fb950;
+      box-shadow: 0 0 5px rgba(63,185,80,0.5);
+    }
+
+    .backend-dot.offline {
+      background: #f85149;
+      box-shadow: 0 0 5px rgba(248,81,73,0.4);
+    }
+
+    .backend-text {
+      flex: 1;
       font-size: 11px;
-      outline: none;
-      transition: border-color 0.2s;
-      letter-spacing: 0.5px;
-    }
-
-    .key-input:focus {
-      border-color: #58a6ff;
-      background: #1c2230;
-    }
-
-    .key-input::placeholder { color: #30363d; }
-
-    .key-input.saved {
-      border-color: #2ea043;
-    }
-
-    /* Save button */
-    .save-btn {
-      width: 100%;
-      padding: 8px 14px;
-      background: #21262d;
-      border: 1px solid #30363d;
-      border-radius: 4px;
       color: #8b949e;
-      font-family: 'Courier New', monospace;
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
     }
 
-    .save-btn:hover {
-      background: #238636;
-      border-color: #2ea043;
-      color: #ffffff;
+    .backend-text span {
+      color: #c9d1d9;
+      font-weight: 600;
     }
 
-    .save-btn.saving {
-      background: #1f2a1f;
-      border-color: #2ea043;
-      color: #3fb950;
+    .backend-url {
+      font-size: 9px;
+      color: #484f58;
+      letter-spacing: 0.3px;
+      word-break: break-all;
     }
-
-    /* Saved confirmation */
-    .saved-confirm {
-      display: none;
-      align-items: center;
-      gap: 6px;
-      margin-top: 8px;
-      font-size: 10px;
-      color: #3fb950;
-      letter-spacing: 0.5px;
-    }
-
-    .saved-confirm.show { display: flex; }
 
     /* ── Audit Log ─────────────────────────────────────────────── */
     .audit-log { padding: 14px 18px 18px; }
@@ -258,7 +217,6 @@
       background: #161b22;
       border: 1px solid #21262d;
       border-radius: 4px;
-      cursor: default;
       transition: border-color 0.15s, background 0.15s;
     }
 
@@ -267,7 +225,6 @@
       background: #1c2230;
     }
 
-    /* Score badge on each log item */
     .log-score {
       font-size: 14px;
       font-weight: 700;
@@ -297,7 +254,6 @@
       color: #484f58;
     }
 
-    /* Color bar on left of each log item */
     .log-bar {
       width: 3px;
       height: 32px;
@@ -348,7 +304,7 @@
     <span class="header-icon">🛡️</span>
     <div class="header-text">
       <div class="header-title">Hallucination Auditor</div>
-      <div class="header-sub">v1.0.0 · ChatGPT · Tavily</div>
+      <div class="header-sub">v1.0.0 · Real-time fact-checking</div>
     </div>
     <div class="status-dot" id="statusDot"></div>
   </div>
@@ -362,42 +318,15 @@
     </label>
   </div>
 
-  <!-- ── API Keys ────────────────────────────────────────────── -->
+  <!-- ── Backend Status ─────────────────────────────────────── -->
   <div class="section">
-    <div class="section-label">API Keys</div>
-
-    <div class="input-group">
-      <div class="input-label">
-        <span class="key-icon">🤖</span> Claude API Key
+    <div class="section-label">Backend Status</div>
+    <div class="backend-status">
+      <div class="backend-dot" id="backendDot"></div>
+      <div>
+        <div class="backend-text" id="backendText">Checking...</div>
+        <div class="backend-url" id="backendUrl"></div>
       </div>
-      <input
-        type="password"
-        id="claudeKey"
-        class="key-input"
-        placeholder="sk-ant-api03-..."
-        autocomplete="off"
-        spellcheck="false"
-      >
-    </div>
-
-    <div class="input-group">
-      <div class="input-label">
-        <span class="key-icon">🔍</span> Tavily API Key
-      </div>
-      <input
-        type="password"
-        id="tavilyKey"
-        class="key-input"
-        placeholder="tvly-..."
-        autocomplete="off"
-        spellcheck="false"
-      >
-    </div>
-
-    <button class="save-btn" id="saveBtn">Save Keys</button>
-
-    <div class="saved-confirm" id="savedConfirm">
-      <span>✓</span> Keys saved securely in local storage
     </div>
   </div>
 
@@ -411,7 +340,7 @@
 
   <!-- ── Footer ─────────────────────────────────────────────── -->
   <div class="footer">
-    <span class="footer-note">Keys stored locally · Never sent to servers</span>
+    <span class="footer-note">Keys secured on backend · Never exposed</span>
     <button class="clear-btn" id="clearBtn">Clear history</button>
   </div>
 

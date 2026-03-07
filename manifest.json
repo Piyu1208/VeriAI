@@ -12,9 +12,7 @@
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
-    "https://openrouter.ai/*",
-    "https://api.tavily.com/*",
-    "https://chat.deepseek.com/*"
+    "http://localhost:3000/*"
   ],
   "background": {
     "service_worker": "background.js",
