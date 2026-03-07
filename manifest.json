@@ -1,18 +1,37 @@
 {
   "manifest_version": 3,
   "name": "Hallucination Auditor",
+  "description": "Real-time fact-checking for AI responses. Detects hallucinations and scores confidence using Claude + Tavily.",
   "version": "1.0.0",
-  "permissions": ["storage", "activeTab"],
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "host_permissions": [
     "https://chat.openai.com/*",
     "https://api.anthropic.com/*",
     "https://api.tavily.com/*"
   ],
-  "background": { "service_worker": "background.js" },
-  "content_scripts": [{
-    "matches": ["https://chat.openai.com/*"],
-    "js": ["content.js"],
-    "css": ["styles.css"]
-  }],
-  "action": { "default_popup": "popup/popup.html" }
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Hallucination Auditor"
+  }
 }

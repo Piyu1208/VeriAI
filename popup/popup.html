@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hallucination Auditor</title>
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────────── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 360px;
+      font-family: 'Courier New', Courier, monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      background: #161b22;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .header-icon { font-size: 22px; }
+
+    .header-text { flex: 1; }
+
+    .header-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f0f6fc;
+      letter-spacing: 0.3px;
+    }
+
+    .header-sub {
+      font-size: 10px;
+      color: #484f58;
+      margin-top: 1px;
+      letter-spacing: 0.5px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3fb950;
+      box-shadow: 0 0 6px rgba(63, 185, 80, 0.6);
+      transition: all 0.3s;
+    }
+
+    .status-dot.off {
+      background: #484f58;
+      box-shadow: none;
+    }
+
+    /* ── Toggle Row ────────────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid #21262d;
+      background: #0d1117;
+    }
+
+    .toggle-label {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .toggle-label span {
+      color: #f0f6fc;
+      font-weight: 600;
+    }
+
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.25s, border-color 0.25s;
+    }
+
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      background: #8b949e;
+      border-radius: 50%;
+      transition: transform 0.25s, background 0.25s;
+    }
+
+    input:checked + .slider {
+      background: #238636;
+      border-color: #2ea043;
+    }
+
+    input:checked + .slider::before {
+      transform: translateX(20px);
+      background: #ffffff;
+    }
+
+    /* ── Section Wrapper ───────────────────────────────────────── */
+    .section {
+      padding: 14px 18px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .section-label {
+      font-size: 9px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #484f58;
+      margin-bottom: 10px;
+    }
+
+    /* ── API Key Inputs ────────────────────────────────────────── */
+    .input-group {
+      margin-bottom: 10px;
+    }
+
+    .input-group:last-of-type {
+      margin-bottom: 12px;
+    }
+
+    .input-label {
+      font-size: 10px;
+      color: #8b949e;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .input-label .key-icon { font-size: 11px; }
+
+    .key-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.2s;
+      letter-spacing: 0.5px;
+    }
+
+    .key-input:focus {
+      border-color: #58a6ff;
+      background: #1c2230;
+    }
+
+    .key-input::placeholder { color: #30363d; }
+
+    .key-input.saved {
+      border-color: #2ea043;
+    }
+
+    /* Save button */
+    .save-btn {
+      width: 100%;
+      padding: 8px 14px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #8b949e;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .save-btn:hover {
+      background: #238636;
+      border-color: #2ea043;
+      color: #ffffff;
+    }
+
+    .save-btn.saving {
+      background: #1f2a1f;
+      border-color: #2ea043;
+      color: #3fb950;
+    }
+
+    /* Saved confirmation */
+    .saved-confirm {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 10px;
+      color: #3fb950;
+      letter-spacing: 0.5px;
+    }
+
+    .saved-confirm.show { display: flex; }
+
+    /* ── Audit Log ─────────────────────────────────────────────── */
+    .audit-log { padding: 14px 18px 18px; }
+
+    .log-empty {
+      text-align: center;
+      color: #484f58;
+      font-size: 11px;
+      padding: 20px 0;
+      line-height: 1.8;
+    }
+
+    .log-empty .empty-icon {
+      font-size: 24px;
+      display: block;
+      margin-bottom: 8px;
+      opacity: 0.4;
+    }
+
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .log-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 11px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 4px;
+      cursor: default;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .log-item:hover {
+      border-color: #30363d;
+      background: #1c2230;
+    }
+
+    /* Score badge on each log item */
+    .log-score {
+      font-size: 14px;
+      font-weight: 700;
+      width: 42px;
+      text-align: center;
+      flex-shrink: 0;
+      font-family: 'Courier New', monospace;
+    }
+
+    .log-score.green  { color: #3fb950; }
+    .log-score.yellow { color: #d29922; }
+    .log-score.red    { color: #f85149; }
+
+    .log-body { flex: 1; min-width: 0; }
+
+    .log-claims {
+      font-size: 11px;
+      color: #c9d1d9;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-time {
+      font-size: 10px;
+      color: #484f58;
+    }
+
+    /* Color bar on left of each log item */
+    .log-bar {
+      width: 3px;
+      height: 32px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .log-bar.green  { background: #3fb950; }
+    .log-bar.yellow { background: #d29922; }
+    .log-bar.red    { background: #f85149; }
+
+    /* ── Footer ────────────────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      border-top: 1px solid #21262d;
+      background: #161b22;
+    }
+
+    .footer-note {
+      font-size: 9px;
+      color: #484f58;
+      letter-spacing: 0.5px;
+    }
+
+    .clear-btn {
+      font-size: 9px;
+      color: #484f58;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      transition: color 0.2s;
+    }
+
+    .clear-btn:hover { color: #f85149; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <div class="header">
+    <span class="header-icon">🛡️</span>
+    <div class="header-text">
+      <div class="header-title">Hallucination Auditor</div>
+      <div class="header-sub">v1.0.0 · ChatGPT · Tavily</div>
+    </div>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+
+  <!-- ── Enable Toggle ──────────────────────────────────────── -->
+  <div class="toggle-row">
+    <span class="toggle-label">Fact-checking is <span id="toggleText">ON</span></span>
+    <label class="switch">
+      <input type="checkbox" id="enableToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <!-- ── API Keys ────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">API Keys</div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span class="key-icon">🤖</span> Claude API Key
+      </div>
+      <input
+        type="password"
+        id="claudeKey"
+        class="key-input"
+        placeholder="sk-ant-api03-..."
+        autocomplete="off"
+        spellcheck="false"
+      >
+    </div>
+
+    <div class="input-group">
+      <div class="input-label">
+        <span class="key-icon">🔍</span> Tavily API Key
+      </div>
+      <input
+        type="password"
+        id="tavilyKey"
+        class="key-input"
+        placeholder="tvly-..."
+        autocomplete="off"
+        spellcheck="false"
+      >
+    </div>
+
+    <button class="save-btn" id="saveBtn">Save Keys</button>
+
+    <div class="saved-confirm" id="savedConfirm">
+      <span>✓</span> Keys saved securely in local storage
+    </div>
+  </div>
+
+  <!-- ── Audit Log ───────────────────────────────────────────── -->
+  <div class="audit-log">
+    <div class="section-label">Recent Audits</div>
+    <div id="auditLog">
+      <!-- Populated by popup.js -->
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────── -->
+  <div class="footer">
+    <span class="footer-note">Keys stored locally · Never sent to servers</span>
+    <button class="clear-btn" id="clearBtn">Clear history</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
