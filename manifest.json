@@ -13,7 +13,8 @@
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://openrouter.ai/*",
-    "https://api.tavily.com/*"
+    "https://api.tavily.com/*",
+    "https://chat.deepseek.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -23,7 +24,8 @@
     {
       "matches": [
         "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
+        "https://chat.openai.com/*",
+        "https://chat.deepseek.com/*"
       ],
       "js": [
         "content.js"

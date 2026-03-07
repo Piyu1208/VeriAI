@@ -1,60 +1,86 @@
 // ─── utils/scorer.js ──────────────────────────────────────────────────────────
 //
 // Pure scoring logic. No API calls. No DOM. No storage. No side effects.
-// Takes the raw Tavily search results for each claim and produces:
-//   - A confidence score (0–100) for each claim
-//   - A color label: "green" | "yellow" | "red"
-//   - A short human-readable verdict
-//   - The best source URL to show in the tooltip
-//   - An overall response score (weighted average of all claims)
 //
-// Input comes from background.js.
-// Output goes back to background.js → content.js → badge injection.
-//
-// Because this file is pure functions, it is trivially unit-testable.
+// FIXES APPLIED:
+//   1. Contradiction signals now require PHRASE matching, not single words.
+//      Single words like "false", "wrong", "myth" caused false positives on
+//      perfectly valid Wikipedia/BBC snippets.
+//   2. Green path is now evaluated BEFORE contradiction — high-confidence
+//      corroboration overrides weak contradiction signals.
+//   3. Relevance threshold lowered to 0.4 (Tavily factual scores are 0.3–0.5).
+//   4. Added keyword overlap fallback for format mismatches (date formats, etc).
+//   5. Corroboration now needs OR not AND with highRelevance.
 // ──────────────────────────────────────────────────────────────────────────────
 
 
-// ── CONTRADICTION / CORROBORATION SIGNAL WORDS ───────────────────────────────
-// scorer.js scans Tavily's synthesized answer for these keywords.
-// These lists are intentionally conservative — false positives are worse
-// than false negatives when labelling something as "contradicted".
+// ── SIGNAL PHRASES ────────────────────────────────────────────────────────────
+// IMPORTANT: Use PHRASES not single words.
+// Single words like "false", "wrong", "myth" appear constantly in neutral
+// Wikipedia/news text and cause false positive contradiction detection.
 
-const CONTRADICTION_SIGNALS = [
-  'false', 'incorrect', 'inaccurate', 'wrong', 'untrue',
-  'misleading', 'debunked', 'myth', 'no evidence', 'not true',
-  'disputed', 'disproven', 'fabricated', 'misinformation'
+const CONTRADICTION_PHRASES = [
+  'this is false', 'this is incorrect', 'this is inaccurate', 'this is wrong',
+  'is not true', 'is untrue', 'has been debunked', 'is a myth',
+  'no evidence for', 'no evidence that', 'not true that',
+  'has been disputed', 'has been disproven', 'was fabricated',
+  'is misinformation', 'is misleading', 'never happened',
+  'did not happen', 'is factually incorrect', 'is factually wrong'
 ];
 
 const CORROBORATION_SIGNALS = [
-  'confirmed', 'correct', 'accurate', 'true', 'verified',
+  // Verification phrases
+  'confirmed', 'correct', 'accurate', 'verified', 'is true',
   'according to', 'research shows', 'studies show', 'evidence shows',
-  'is indeed', 'has been established', 'documented'
+  'is indeed', 'has been established', 'documented', 'officially',
+  'on record', 'historically',
+  // Factual statement patterns (very common in encyclopedia snippets)
+  'born on', 'born in', 'was born', 'is a', 'is an', 'is the',
+  'known as', 'referred to as', 'listed as', 'took place', 'occurred',
+  'won', 'achieved', 'led', 'captained', 'founded', 'created',
+  'died on', 'died in', 'established in', 'introduced in',
+  'assumed office', 'took office', 'served as', 'became the',
+  'passed away', 'gained independence', 'independence on',
+  'first prime minister', 'first president', 'first minister'
 ];
+
+
+// ── KEYWORD EXTRACTION ────────────────────────────────────────────────────────
+
+function extractKeywords(claim) {
+  const stopWords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to',
+    'for', 'of', 'with', 'by', 'from', 'is', 'was', 'are', 'were',
+    'he', 'she', 'it', 'they', 'his', 'her', 'its', 'as', 'that',
+    'this', 'be', 'been', 'have', 'has', 'had', 'one', 'into', 'also'
+  ]);
+  return claim
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w));
+}
+
+function keywordOverlap(claim, combinedText) {
+  const keywords = extractKeywords(claim);
+  if (keywords.length === 0) return 0;
+  const matches = keywords.filter(kw => combinedText.includes(kw));
+  return matches.length / keywords.length;
+}
 
 
 // ── CORE SCORING FUNCTION ─────────────────────────────────────────────────────
 
 /**
- * Scores a single claim based entirely on its Tavily web search result.
- * Web search is the source of truth — Claude extracted the claim, Tavily judges it.
+ * Scores a single claim based on its Tavily web search result.
  *
- * Scoring logic:
- *   NULL result (Tavily failed / no results)  → 50  "Unverified"
- *   Empty results (no pages found)            → 40  "No sources found"
- *   Contradiction signals in answer           → 10–25 "Contradicted"
- *   Low relevance results (score < 0.3)       → 45  "Weakly supported"
- *   Corroboration signals in answer           → 85–95 "Verified"
- *   Multiple high-relevance sources           → 80–90 "Well sourced"
- *   Single relevant source, neutral answer    → 65  "Partially supported"
- *
- * @param {string}      claim        - The claim text (used for logging)
- * @param {Object|null} tavilyResult - Result from callTavily(), or null
+ * @param {string}      claim
+ * @param {Object|null} tavilyResult
  * @returns {Object} { score, color, verdict, sourceUrl }
  */
 export function scoreClaim(claim, tavilyResult) {
 
-  // ── Case 1: Tavily call failed entirely (network error, rate limit, etc.)
+  // ── Case 1: Tavily call failed entirely
   if (tavilyResult === null) {
     return {
       score: 50,
@@ -66,7 +92,7 @@ export function scoreClaim(claim, tavilyResult) {
 
   const { answer, results } = tavilyResult;
 
-  // ── Case 2: Search returned zero results — claim may be too obscure or wrong
+  // ── Case 2: Search returned zero results
   if (!results || results.length === 0) {
     return {
       score: 40,
@@ -76,39 +102,49 @@ export function scoreClaim(claim, tavilyResult) {
     };
   }
 
-  // Best source URL = highest relevance score from Tavily
+  // Best source = highest Tavily relevance score
   const topResult = results.reduce((best, r) =>
     (r.score || 0) > (best.score || 0) ? r : best, results[0]
   );
   const sourceUrl = topResult.url || null;
 
-  // Scan Tavily's synthesized answer for contradiction/corroboration signals
-  const answerText = (answer || '').toLowerCase();
-  const snippetText = results.map(r => (r.content || '').toLowerCase()).join(' ');
+  // Build combined text for signal scanning
+  const answerText   = (answer || '').toLowerCase();
+  const snippetText  = results.map(r => (r.content || '').toLowerCase()).join(' ');
   const combinedText = answerText + ' ' + snippetText;
 
-  const hasContradiction = CONTRADICTION_SIGNALS.some(w => combinedText.includes(w));
-  const hasCorroboration = CORROBORATION_SIGNALS.some(w => combinedText.includes(w));
+  // FIX 1: Phrase-based contradiction — no more single word false positives
+  const hasContradiction   = CONTRADICTION_PHRASES.some(p => combinedText.includes(p));
+  const hasCorroboration   = CORROBORATION_SIGNALS.some(w => combinedText.includes(w));
 
-  // Average relevance score across all Tavily results (0.0 – 1.0)
-  const avgRelevance = results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length;
-  const highRelevance = avgRelevance >= 0.6;
-  const multipleGoodSources = results.filter(r => (r.score || 0) >= 0.5).length >= 2;
+  // Relevance metrics
+  const avgRelevance        = results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length;
+  const highRelevance       = avgRelevance >= 0.4;
+  const multipleGoodSources = results.filter(r => (r.score || 0) >= 0.35).length >= 2;
+  const topSourceStrong     = (topResult.score || 0) >= 0.7;
 
-  // ── Case 3: Web explicitly contradicts the claim
-  if (hasContradiction) {
+  // Keyword overlap — handles name/date format mismatches
+  const overlap            = keywordOverlap(claim, combinedText);
+  const strongKeywordMatch = overlap >= 0.5;
+
+  // FIX 2: Evaluate GREEN paths FIRST — strong evidence overrides weak contradiction signals
+
+  // ── Case 3: Top source very strong (≥ 0.7) + corroboration → definitely green
+  if (topSourceStrong && hasCorroboration) {
     return {
-      score: Math.round(10 + (avgRelevance * 15)), // 10–25 range
-      color: 'red',
-      verdict: 'Web sources contradict this claim',
+      score: multipleGoodSources ? 95 : 88,
+      color: 'green',
+      verdict: multipleGoodSources
+        ? 'Verified by multiple strong sources'
+        : 'Verified by strong source',
       sourceUrl
     };
   }
 
-  // ── Case 4: Strong corroboration — answer confirms + high relevance sources
-  if (hasCorroboration && highRelevance) {
+  // ── Case 4: Strong keyword match + any relevance → green
+  if (strongKeywordMatch && highRelevance) {
     return {
-      score: multipleGoodSources ? 93 : 85,
+      score: multipleGoodSources ? 92 : 83,
       color: 'green',
       verdict: multipleGoodSources
         ? 'Verified by multiple sources'
@@ -117,27 +153,39 @@ export function scoreClaim(claim, tavilyResult) {
     };
   }
 
-  // ── Case 5: Multiple high-relevance sources found, neutral answer
-  if (multipleGoodSources) {
+  // ── Case 5: Corroboration signals OR high relevance → green
+  if (hasCorroboration || highRelevance) {
     return {
-      score: 80,
+      score: multipleGoodSources ? 87 : 78,
       color: 'green',
-      verdict: 'Supported by multiple web sources',
+      verdict: multipleGoodSources
+        ? 'Supported by multiple sources'
+        : 'Supported by web source',
       sourceUrl
     };
   }
 
-  // ── Case 6: One relevant source found, no strong signals either way
-  if (highRelevance) {
+  // ── Case 6: Only now check contradiction — evidence is already weak if we're here
+  if (hasContradiction) {
+    return {
+      score: Math.round(10 + (avgRelevance * 15)), // 10–25
+      color: 'red',
+      verdict: 'Web sources contradict this claim',
+      sourceUrl
+    };
+  }
+
+  // ── Case 7: Decent keyword overlap but no strong signals
+  if (strongKeywordMatch) {
     return {
       score: 65,
       color: 'yellow',
-      verdict: 'Partially supported — one source found',
+      verdict: 'Partially supported — related sources found',
       sourceUrl
     };
   }
 
-  // ── Case 7: Results found but low relevance — weak match
+  // ── Case 8: Weak match overall
   return {
     score: 45,
     color: 'yellow',
@@ -149,13 +197,6 @@ export function scoreClaim(claim, tavilyResult) {
 
 // ── COLOR THRESHOLD HELPER ────────────────────────────────────────────────────
 
-/**
- * Maps a 0–100 score to a CSS color class name.
- * Used as a fallback — scoreClaim() sets color directly in most cases.
- *
- * @param {number} score
- * @returns {"green"|"yellow"|"red"}
- */
 export function getColor(score) {
   if (score >= 75) return 'green';
   if (score >= 40) return 'yellow';
@@ -166,28 +207,18 @@ export function getColor(score) {
 // ── OVERALL RESPONSE SCORE ────────────────────────────────────────────────────
 
 /**
- * Calculates the single overall confidence score for the entire AI response.
- * This is the number shown in the floating score chip (e.g. "Overall: 78%").
+ * Weighted average — red claims drag the overall score down harder.
  *
- * Uses a weighted average — low-scoring claims pull the overall down harder
- * than high-scoring ones pull it up. This is intentional: one badly wrong
- * claim should noticeably hurt the overall score.
- *
- * @param {Array} scoredClaims - Array of { score, color, verdict, sourceUrl }
+ * @param {Array} scoredClaims
  * @returns {number} Integer 0–100
  */
 export function calculateOverall(scoredClaims) {
-  if (!scoredClaims || scoredClaims.length === 0) {
-    return 100; // No claims found = nothing to fact-check = no risk flagged
-  }
+  if (!scoredClaims || scoredClaims.length === 0) return 100;
 
-  // Weight each claim by the inverse of its score
-  // Low-scoring claims (red) get higher weight → drag overall down more
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const claim of scoredClaims) {
-    // Weight formula: red claims (score < 40) count 2x, yellow 1.5x, green 1x
     const weight = claim.score < 40 ? 2.0 : claim.score < 75 ? 1.5 : 1.0;
     weightedSum += claim.score * weight;
     totalWeight += weight;
@@ -200,32 +231,18 @@ export function calculateOverall(scoredClaims) {
 // ── MASTER PROCESS FUNCTION ───────────────────────────────────────────────────
 
 /**
- * Takes the raw claims array (strings from Claude) and a map of
- * Tavily results (keyed by claim string), and returns the complete
- * scored audit result ready for badge injection.
- *
+ * Takes raw claims + tavilyMap, returns complete scored audit result.
  * This is the only function background.js needs to call from this file.
  *
- * @param {string[]}     claims     - Plain claim strings from callClaude()
- * @param {Object}       tavilyMap  - { [claimString]: tavilyResult | null }
- * @returns {Object} {
- *   claims: [{ text, score, color, verdict, sourceUrl }, ...],
- *   overall: number
- * }
+ * @param {string[]} claims
+ * @param {Object}   tavilyMap - { [claimString]: tavilyResult | null }
+ * @returns {Object} { claims: [{ text, score, color, verdict, sourceUrl }], overall }
  */
 export function processClaims(claims, tavilyMap) {
-
   const scoredClaims = claims.map(claimText => {
     const tavilyResult = tavilyMap[claimText] ?? null;
     const { score, color, verdict, sourceUrl } = scoreClaim(claimText, tavilyResult);
-
-    return {
-      text: claimText,   // Original claim string — used for badge matching in DOM
-      score,             // 0–100 confidence score from web results
-      color,             // "green" | "yellow" | "red" — CSS class for badge
-      verdict,           // Human-readable one-liner shown in tooltip
-      sourceUrl          // Best source link shown in tooltip (can be null)
-    };
+    return { text: claimText, score, color, verdict, sourceUrl };
   });
 
   return {

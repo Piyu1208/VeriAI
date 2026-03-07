@@ -1,246 +1,156 @@
-/* ─── styles.css ──────────────────────────────────────────────────────────────
-   Injected directly into chat.openai.com by Chrome alongside content.js.
+/* ─── VeriAI / Hallucination Auditor — styles.css ─────────────────────────── */
 
-   CRITICAL RULE: Every single class uses the .ha- prefix.
-   This guarantees zero collision with ChatGPT's own CSS — no matter
-   what they change in their UI, our styles stay isolated and intact.
-
-   What this file styles:
-     .ha-claim            → the colored underline badge on each claim
-     .ha-green/yellow/red → the three confidence color variants
-     .ha-tooltip          → the hover card showing score + verdict + source
-     .ha-score-chip       → the floating overall score badge above each response
-     .ha-chip-error       → the error state chip when audit fails
-   ────────────────────────────────────────────────────────────────────────── */
-
-
-/* ── CLAIM BADGES (underlines on claim text) ──────────────────────────────── */
-
-.ha-claim {
-  /* Reset mark element's default yellow background */
-  background: transparent !important;
-
-  /* Cursor signals this is interactive */
-  cursor: pointer;
-
-  /* Subtle padding so the underline doesn't touch the letters */
-  padding: 0 1px 1px;
-
-  /* Smooth background fill on hover */
-  transition: background 0.15s ease, border-radius 0.15s ease;
-
-  /* Needed for tooltip absolute positioning */
-  position: relative;
-
-  /* Remove any default text decoration */
-  text-decoration: none !important;
-
-  /* Slight border radius on hover fill */
-  border-radius: 2px;
+.ha-audit-card {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  border-radius: 10px;
+  margin: 10px 0 14px 0;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
 }
 
-/* ── Green — Verified (score ≥ 75) ────────────────────────────────────────── */
-.ha-claim.ha-green {
-  border-bottom: 2px solid #22c55e;
-}
+/* ── CARD HEADER ───────────────────────────────────────────────────────────── */
 
-.ha-claim.ha-green:hover {
-  background: rgba(34, 197, 94, 0.12) !important;
-}
-
-/* ── Yellow — Uncertain (score 40–74) ─────────────────────────────────────── */
-.ha-claim.ha-yellow {
-  border-bottom: 2px solid #eab308;
-  border-bottom-style: dashed; /* Dashed = less certain */
-}
-
-.ha-claim.ha-yellow:hover {
-  background: rgba(234, 179, 8, 0.12) !important;
-}
-
-/* ── Red — Contradicted / Unverified (score < 40) ─────────────────────────── */
-.ha-claim.ha-red {
-  border-bottom: 2px solid #ef4444;
-}
-
-.ha-claim.ha-red:hover {
-  background: rgba(239, 68, 68, 0.12) !important;
-}
-
-
-/* ── TOOLTIP CARD ─────────────────────────────────────────────────────────── */
-
-.ha-tooltip {
-  /* Fixed position so it doesn't scroll with the page */
-  position: absolute;
-  z-index: 2147483647; /* Max z-index — always on top of everything */
-
-  /* Dimensions */
-  min-width: 220px;
-  max-width: 300px;
-
-  /* Dark card styling */
-  background: #1a1f2e;
-  border: 1px solid #2d3548;
-  border-radius: 6px;
-  padding: 12px 14px;
-
-  /* Subtle depth */
-  box-shadow:
-    0 4px 6px rgba(0, 0, 0, 0.3),
-    0 10px 30px rgba(0, 0, 0, 0.4);
-
-  /* Don't block hover on the mark element below */
-  pointer-events: none;
-
-  /* Smooth fade-in */
-  animation: haTooltipIn 0.15s ease;
-}
-
-/* Tooltip arrow (small triangle pointing downward toward the claim) */
-.ha-tooltip::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: 14px;
-  width: 10px;
-  height: 6px;
-  background: #1a1f2e;
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-}
-
-/* Score line — large and prominent */
-.ha-tooltip-score {
-  font-size: 14px;
-  font-weight: 700;
-  color: #f0f6fc;
-  font-family: 'Courier New', Courier, monospace;
-  margin-bottom: 5px;
-  letter-spacing: 0.3px;
-}
-
-/* Verdict line — explains what the web found */
-.ha-tooltip-verdict {
-  font-size: 11px;
-  color: #8b949e;
-  line-height: 1.5;
-  margin-bottom: 9px;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-/* Clickable source link */
-.ha-tooltip-link {
-  display: inline-block;
-  font-size: 11px;
-  color: #58a6ff;
-  text-decoration: none;
-  font-family: 'Courier New', Courier, monospace;
-  letter-spacing: 0.3px;
-  pointer-events: auto; /* Re-enable clicks just for the link */
-  cursor: pointer;
-  border-bottom: 1px solid rgba(88, 166, 255, 0.3);
-  padding-bottom: 1px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.ha-tooltip-link:hover {
-  color: #79b8ff;
-  border-color: rgba(121, 184, 255, 0.5);
-}
-
-/* "No source available" fallback text */
-.ha-tooltip-no-source {
-  font-size: 10px;
-  color: #3d444f;
-  font-family: 'Courier New', Courier, monospace;
-  letter-spacing: 0.5px;
-}
-
-/* Tooltip entrance animation */
-@keyframes haTooltipIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-
-/* ── OVERALL SCORE CHIP ────────────────────────────────────────────────────── */
-/* Floats above the ChatGPT response showing the aggregate confidence score   */
-
-.ha-score-chip {
-  display: inline-flex;
+.ha-card-header {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  padding: 10px 14px;
+}
 
-  font-family: 'Courier New', Courier, monospace;
+.ha-card-green  .ha-card-header { background: #f0fdf4; border-bottom: 1px solid #bbf7d0; }
+.ha-card-yellow .ha-card-header { background: #fffbeb; border-bottom: 1px solid #fde68a; }
+.ha-card-red    .ha-card-header { background: #fef2f2; border-bottom: 1px solid #fecaca; }
+.ha-card-error  .ha-card-header { background: #fef2f2; border-bottom: 1px solid #fecaca; }
+
+.ha-card-icon  { font-size: 15px; }
+
+.ha-card-score {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.ha-card-green  .ha-card-score { color: #16a34a; }
+.ha-card-yellow .ha-card-score { color: #d97706; }
+.ha-card-red    .ha-card-score { color: #dc2626; }
+
+.ha-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.ha-card-green  .ha-card-label { background: #dcfce7; color: #15803d; }
+.ha-card-yellow .ha-card-label { background: #fef9c3; color: #a16207; }
+.ha-card-red    .ha-card-label { background: #fee2e2; color: #b91c1c; }
+
+.ha-card-count {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+/* ── TOGGLE BUTTON ─────────────────────────────────────────────────────────── */
+
+.ha-toggle-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-
-  padding: 5px 12px 5px 9px;
-  border-radius: 4px;
-  border: 1px solid;
-
-  margin-bottom: 10px;
-
-  /* Slide in from the left when it appears */
-  animation: haChipIn 0.3s ease;
+  border-radius: 20px;
+  border: 1.5px solid;
+  cursor: pointer;
+  background: transparent;
+  transition: opacity 0.15s;
 }
 
-.ha-chip-icon  { font-size: 13px; }
-.ha-chip-score { font-size: 14px; font-weight: 700; }
-.ha-chip-label { font-size: 11px; }
+.ha-toggle-btn:hover  { opacity: 0.75; }
+.ha-toggle-btn:active { opacity: 0.55; }
 
-.ha-chip-count {
-  font-size: 10px;
-  opacity: 0.6;
-  font-weight: 400;
+.ha-card-green  .ha-toggle-btn { color: #15803d; border-color: #86efac; }
+.ha-card-yellow .ha-toggle-btn { color: #a16207; border-color: #fcd34d; }
+.ha-card-red    .ha-toggle-btn { color: #b91c1c; border-color: #fca5a5; }
+
+/* ── CLAIMS PANEL ──────────────────────────────────────────────────────────── */
+
+.ha-claims-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  gap: 14px;          /* generous vertical space between claims */
+  background: #ffffff;
 }
 
-/* Green chip — overall ≥ 75% */
-.ha-chip-green {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.3);
-  color: #4ade80;
+/* ── CLAIM ROW — simple list style ────────────────────────────────────────── */
+
+.ha-claim-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f3f4f6;
 }
 
-/* Yellow chip — overall 40–74% */
-.ha-chip-yellow {
-  background: rgba(234, 179, 8, 0.08);
-  border-color: rgba(234, 179, 8, 0.3);
-  color: #facc15;
+.ha-claim-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
-/* Red chip — overall < 40% */
-.ha-chip-red {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-/* Error chip — when audit pipeline fails */
-.ha-chip-error {
-  background: rgba(139, 148, 158, 0.06);
-  border-color: rgba(139, 148, 158, 0.2);
-  color: #8b949e;
+.ha-claim-dot {
   font-size: 11px;
-  font-weight: 400;
-  gap: 8px;
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
-/* Score chip entrance animation */
-@keyframes haChipIn {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.ha-claim-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
+
+.ha-claim-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ha-claim-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ha-claim-score {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+
+.ha-row-green  .ha-claim-score { background: #dcfce7; color: #15803d; }
+.ha-row-yellow .ha-claim-score { background: #fef9c3; color: #a16207; }
+.ha-row-red    .ha-claim-score { background: #fee2e2; color: #b91c1c; }
+
+.ha-claim-verdict {
+  font-size: 11.5px;
+  color: #6b7280;
+}
+
+.ha-claim-source {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.ha-claim-source:hover { text-decoration: underline; }
