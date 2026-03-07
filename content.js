@@ -1,3 +1,5 @@
+console.log('[VeriAI] content.js injected ✅');
+
 // ─── content.js ───────────────────────────────────────────────────────────────
 //
 // Injected automatically into every chat.openai.com tab by Chrome.
