@@ -93,14 +93,14 @@ LLM responds on page
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Platform | Chrome Extension (Manifest V3) |
-| Frontend | HTML, CSS, Vanilla JavaScript |
-| Claim Extraction | Llama via [OpenRouter API](https://openrouter.ai) |
-| Fact-Checking | [Tavily Search API](https://tavily.com) |
-| Sources | Wikipedia + live web results |
-| Architecture | Service Worker + Content Scripts |
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
+![Chrome Extension](https://img.shields.io/badge/Chrome_Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
+![Manifest V3](https://img.shields.io/badge/Manifest_V3-34A853?style=for-the-badge&logo=googlechrome&logoColor=white)
+![Llama](https://img.shields.io/badge/Llama_(OpenRouter)-6B21A8?style=for-the-badge&logo=meta&logoColor=white)
+![Tavily API](https://img.shields.io/badge/Tavily_API-0EA5E9?style=for-the-badge&logo=searchengin&logoColor=white)
+![Wikipedia](https://img.shields.io/badge/Wikipedia-000000?style=for-the-badge&logo=wikipedia&logoColor=white)
 
 ---
 
