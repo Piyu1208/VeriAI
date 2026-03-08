@@ -8,7 +8,7 @@ const DB_NAME    = 'HallucinationAuditor';
 const STORE_NAME = 'audits';
 
 // Must match BACKEND_URL in utils/api.js
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = 'https://veriai-isml.onrender.com';
 
 
 // ── ON POPUP OPEN ─────────────────────────────────────────────────────────────

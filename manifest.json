@@ -13,7 +13,7 @@
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://gemini.google.com/*",
-    "http://localhost:3000/*"
+    "https://veriai-isml.onrender.com/*"
   ],
   "background": {
     "service_worker": "background.js",

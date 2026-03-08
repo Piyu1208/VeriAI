@@ -7,7 +7,7 @@
 // e.g. 'https://verai-backend.onrender.com'
 // ──────────────────────────────────────────────────────────────────────────────
 
-const BACKEND_URL = 'http://localhost:3000'; // ← update after deploy
+const BACKEND_URL = 'https://veriai-isml.onrender.com'; // ← update after deploy
 
 
 // ── STEP 1: EXTRACT CLAIMS ────────────────────────────────────────────────────
